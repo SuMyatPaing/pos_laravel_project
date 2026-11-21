@@ -2,16 +2,17 @@
 namespace App\Http\Controllers\User;
 use App\Models\Cart;
 use App\Models\User;
-
 use App\Models\Order;
-use App\Models\Rating    ;
+use App\Models\Rating;
 use App\Models\Comment;
-use App\Models\Contact;
+use App\Models\Contact    ;
 use App\Models\Payment;
 use App\Models\Product;
 use App\Models\Category;
+use Illuminate\Support\Str;
 use Illuminate\Http\Request;
 use App\Models\PaymentHistory;
+use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -249,54 +250,131 @@ public function paymentPage()
     return view('user.home.payment', compact('paymentAcc', 'orderTemp'));
 }
 //order process
-public function order(Request $request){
+// public function order(Request $request){
+//     $request->validate([
+//         'name'=>'required|string|max:255',
+//         'phone' => 'required|string|regex:/^[0-9]{9,15}$/',
+//         'address' => 'required|string|max:255',
+//         // 'paymentType' => 'required|exists:payments,id',
+//         'paymentType' => 'required',
+//         'payslipImage' => 'required|image|mimes:jpeg,png,jpg,gif,svg,webp|max:2048',
+//     ]);
+//     $orderTemp=Session::get('tempCart');
+//     // dd($orderTemp);
+//     $paymentHistoryData=[
+//         'user_name'=>$request->name,
+//         'phone' => $request->phone,
+//         'address' => $request->address,
+//         'payment_method' => $request->paymentType,
+//         'order_code' => $request->orderCode,
+//        'total_amt' => (int) str_replace(' mmk', '', $request->totalAmount),
+//     ];
+//     if($request->hasFile('payslipImage')){
+//         $file=$request->file('payslipImage');
+//         $fileName=uniqid().'_'.$file->getClientOriginalName();
+//         $file->move(public_path().'/payslipImage/',$fileName);
+//         $paymentHistoryData['payslip_image']=$fileName;
+//     }
+//     PaymentHistory::create($paymentHistoryData);
+//     // Order::create($orderTemp); because of mass assignment error, we will use foreach loop to create each order
+//     foreach($orderTemp as $item){
+//         Order::create([
+//                         'product_id' => $item['product_id'],
+//             'user_id' => $item['user_id'],
+
+//             'count' => $item['count'],
+//             'status' => $item['status'],
+//             'order_code' => $item['order_code'],
+//             ]);
+
+//                Cart::where('user_id', $item['user_id'])
+//               ->where('product_id', $item['product_id'])
+//               ->delete();
+//         }
+
+
+
+//              Alert::success('Thank for your order!', 'Order Created successfully!');
+//             // return back();
+//             return to_route('user#orderList');
+// }
+
+public function order(Request $request)
+{
     $request->validate([
-        'name'=>'required|string|max:255',
+        'name' => 'required|string|max:255',
         'phone' => 'required|string|regex:/^[0-9]{9,15}$/',
         'address' => 'required|string|max:255',
-        // 'paymentType' => 'required|exists:payments,id',
         'paymentType' => 'required',
         'payslipImage' => 'required|image|mimes:jpeg,png,jpg,gif,svg,webp|max:2048',
     ]);
-    $orderTemp=Session::get('tempCart');
-    // dd($orderTemp);
-    $paymentHistoryData=[
-        'user_name'=>$request->name,
-        'phone' => $request->phone,
-        'address' => $request->address,
-        'payment_method' => $request->paymentType,
-        'order_code' => $request->orderCode,
-       'total_amt' => (int) str_replace(' mmk', '', $request->totalAmount),
-    ];
-    if($request->hasFile('payslipImage')){
-        $file=$request->file('payslipImage');
-        $fileName=uniqid().'_'.$file->getClientOriginalName();
-        $file->move(public_path().'/payslipImage/',$fileName);
-        $paymentHistoryData['payslip_image']=$fileName;
-    }
-    PaymentHistory::create($paymentHistoryData);
-    // Order::create($orderTemp); because of mass assignment error, we will use foreach loop to create each order
-    foreach($orderTemp as $item){
-        Order::create([
-                        'product_id' => $item['product_id'],
-            'user_id' => $item['user_id'],
 
-            'count' => $item['count'],
-            'status' => $item['status'],
-            'order_code' => $item['order_code'],
+    $orderTemp = Session::get('tempCart');
+
+    if (empty($orderTemp)) {
+        return back()->withErrors([
+            'order' => 'Your cart is empty. Please try again.'
+        ]);
+    }
+
+    // Generate a new unique order code
+    do {
+        $orderCode = 'CL-POS-' . now()->format('YmdHis')
+            . '-' . Str::upper(Str::random(5));
+    } while (
+        PaymentHistory::where('order_code', $orderCode)->exists() ||
+        Order::where('order_code', $orderCode)->exists()
+    );
+
+    // Upload payslip
+    $file = $request->file('payslipImage');
+    $fileName = uniqid() . '_' . $file->getClientOriginalName();
+
+    $file->move(public_path('payslipImage'), $fileName);
+
+    $totalAmount = (int) str_replace(' mmk', '', $request->totalAmount);
+
+    // Save payment history and orders together
+    DB::transaction(function () use (
+        $request,
+        $orderTemp,
+        $orderCode,
+        $fileName,
+        $totalAmount
+    ) {
+        PaymentHistory::create([
+            'user_name' => $request->name,
+            'phone' => $request->phone,
+            'address' => $request->address,
+            'payment_method' => $request->paymentType,
+            'order_code' => $orderCode,
+            'total_amt' => $totalAmount,
+            'payslip_image' => $fileName,
+        ]);
+
+        foreach ($orderTemp as $item) {
+            Order::create([
+                'product_id' => $item['product_id'],
+                'user_id' => $item['user_id'],
+                'count' => $item['count'],
+                'status' => $item['status'],
+                'order_code' => $orderCode,
             ]);
 
-               Cart::where('user_id', $item['user_id'])
-              ->where('product_id', $item['product_id'])
-              ->delete();
+            Cart::where('user_id', $item['user_id'])
+                ->where('product_id', $item['product_id'])
+                ->delete();
         }
+    });
 
+    // Clear temporary cart after successful order
+    Session::forget('tempCart');
 
+    Alert::success('Thank you for your order!', 'Order created successfully!');
 
-             Alert::success('Thank for your order!', 'Order Created successfully!');
-            // return back();
-            return to_route('user#orderList');
+    return to_route('user#orderList');
 }
+
 
 // direct orderlist page
 

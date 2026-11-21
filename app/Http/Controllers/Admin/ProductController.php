@@ -85,10 +85,10 @@ public function update(Request $request){
      $fileName=uniqid().$request->file('image')->getClientOriginalName();
             $request->file('image')->move(public_path().'/productImage/',$fileName);
             $data['image']=$fileName;
-        
+
     }else{
           $data['image']=$request->productImage;
-        
+
     }
 
     Product::where('id',$request->productId)->update($data);
@@ -118,7 +118,7 @@ private function checkValidation($request,$action){
      'name' =>'required|min:2|max:30|unique:products,name,'.$request->productId,
       'categoryId' =>'required',
        'price' =>'required|numeric|min:2,',
-        'stock' =>'required|numeric|min:1|max:999',
+        'stock' =>'required|numeric|min:1',
          'description' =>'required|max:2000|string',
    ];
    $rules['image'] = $action =='create' ? 'required|file|mimes:jpg,jpeg,png,webp,svg,gif' :   'file|mimes:jpg,jpeg,png,webp,svg,gif';
