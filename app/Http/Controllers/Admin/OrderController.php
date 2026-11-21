@@ -73,20 +73,39 @@ foreach ($order as $item) {
             ],200);
     }
     //order confirm
-    public function orderConfirm(Request $request){
-         Order::where('order_code',$request[0]['orderCode'])->update([
-            'status'=>1
-        ]);
-    foreach($request->all() as $item){
-        Product::where('id',$item['productId'])->decrement('stock',$item['productOrderCount']);
-        return response()->json([
-            'status'=>'success',
-            'message'=>'Order Accept Successfully'
-            ],200);
-    }
+    // public function orderConfirm(Request $request){
+    //      Order::where('order_code',$request[0]['orderCode'])->update([
+    //         'status'=>1
+    //     ]);
+    // foreach($request->all() as $item){
+    //     Product::where('id',$item['productId'])->decrement('stock',$item['productOrderCount']);
+    //     return response()->json([
+    //         'status'=>'success',
+    //         'message'=>'Order Accept Successfully'
+    //         ],200);
+    // }
+    // }
+
+// order confirm
+public function orderConfirm(Request $request)
+{
+    Order::where('order_code', $request[0]['orderCode'])->update([
+        'status' => 1
+    ]);
+
+    foreach ($request->all() as $item) {
+
+        Product::where('id', $item['productId'])
+            ->decrement('stock', $item['productOrderCount']);
+
     }
 
-
+    // Return AFTER the foreach loop finishes
+    return response()->json([
+        'status' => 'success',
+        'message' => 'Order Accept Successfully'
+    ], 200);
+}
     //sale information
     public function saleInformation()
 {
@@ -104,7 +123,7 @@ foreach ($order as $item) {
     ->groupBy('order_code',)
     ->orderBy('orders.created_at', 'desc')
     ->paginate(10);
-  
+
 
     return view('admin.sale.saleInformation', compact('saleList'));
 }
